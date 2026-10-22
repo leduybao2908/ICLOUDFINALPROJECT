@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản lý sản phẩm</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Quản lý sản phẩm</h1>
+
+    <!-- Form thêm sản phẩm -->
+    <section class="card">
+      <h2>Thêm sản phẩm</h2>
+      <form id="addForm">
+        <input type="text" id="name" placeholder="Tên sản phẩm" required>
+        <input type="number" id="price" placeholder="Giá (VNĐ)" required>
+        <input type="text" id="description" placeholder="Mô tả">
+        <button type="submit">Thêm</button>
+      </form>
+    </section>
+
+    <!-- Tìm kiếm -->
+    <section class="card">
+      <h2>Tìm kiếm</h2>
+      <input type="text" id="searchInput" placeholder="Nhập tên sản phẩm cần tìm...">
+    </section>
+
+    <!-- Danh sách -->
+    <section class="card">
+      <h2>Danh sách sản phẩm</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Tên</th>
+            <th>Giá</th>
+            <th>Mô tả</th>
+          </tr>
+        </thead>
+        <tbody id="productList"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
