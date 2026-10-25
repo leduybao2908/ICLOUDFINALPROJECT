@@ -1,49 +1,270 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quản lý sản phẩm</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    header {
+      background: #1e3a5f;
+      color: white;
+      padding: 25px 6%;
+    }
+
+    header h1 { margin: 0 0 8px; }
+    header p { margin: 0; color: #dbeafe; }
+
+    main {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+
+    .panel {
+      background: white;
+      padding: 24px;
+      margin-bottom: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px #0f172a0d;
+    }
+
+    h2 { margin-top: 0; }
+
+    form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 15px;
+    }
+
+    label { display: block; font-weight: 600; }
+    input {
+      display: block;
+      width: 100%;
+      padding: 11px;
+      margin-top: 7px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+    }
+
+    button {
+      border: 0;
+      padding: 11px 17px;
+      border-radius: 7px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    .submit-button { align-self: end; }
+    .search-row { display: flex; gap: 10px; }
+    .search-row input { margin: 0; flex: 1; }
+    #message { margin: 15px 0 0; }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      min-width: 650px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 13px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    th { background: #eff6ff; }
+
+    @media (max-width: 600px) {
+      form { grid-template-columns: 1fr; }
+      .search-row { flex-wrap: wrap; }
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
+  <header>
     <h1>Quản lý sản phẩm</h1>
+    <p>Node.js · Express · MySQL · Railway</p>
+  </header>
 
-    <!-- Form thêm sản phẩm -->
-    <section class="card">
-      <h2>Thêm sản phẩm</h2>
-      <form id="addForm">
-        <input type="text" id="name" placeholder="Tên sản phẩm" required>
-        <input type="number" id="price" placeholder="Giá (VNĐ)" required>
-        <input type="text" id="description" placeholder="Mô tả">
-        <button type="submit">Thêm</button>
+  <main>
+    <section class="panel">
+      <h2>Thêm sản phẩm mới</h2>
+      <form id="productForm">
+        <label>
+          Mã sản phẩm
+          <input name="product_code" required maxlength="50"
+                 placeholder="VD: SP001">
+        </label>
+
+        <label>
+          Tên sản phẩm
+          <input name="name" required maxlength="255"
+                 placeholder="VD: Bàn phím cơ">
+        </label>
+
+        <label>
+          Giá (VNĐ)
+          <input name="price" type="number" min="0.01"
+                 step="0.01" required placeholder="500000">
+        </label>
+
+        <label>
+          Số lượng
+          <input name="quantity" type="number" min="0"
+                 step="1" value="0" required>
+        </label>
+
+        <button class="submit-button" type="submit">
+          Thêm sản phẩm
+        </button>
       </form>
+      <p id="message" role="status"></p>
     </section>
 
-    <!-- Tìm kiếm -->
-    <section class="card">
-      <h2>Tìm kiếm</h2>
-      <input type="text" id="searchInput" placeholder="Nhập tên sản phẩm cần tìm...">
-    </section>
-
-    <!-- Danh sách -->
-    <section class="card">
+    <section class="panel">
       <h2>Danh sách sản phẩm</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Tên</th>
-            <th>Giá</th>
-            <th>Mô tả</th>
-          </tr>
-        </thead>
-        <tbody id="productList"></tbody>
-      </table>
-    </section>
-  </div>
+      <div class="search-row">
+        <input id="searchInput"
+               placeholder="Tìm theo tên hoặc mã sản phẩm...">
+        <button id="searchButton">Tìm kiếm</button>
+        <button id="resetButton">Làm mới</button>
+      </div>
 
-  <script src="script.js"></script>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Mã sản phẩm</th>
+              <th>Tên sản phẩm</th>
+              <th>Giá (VNĐ)</th>
+              <th>Số lượng</th>
+            </tr>
+          </thead>
+          <tbody id="productTable">
+            <tr><td colspan="5">Đang tải dữ liệu...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("productForm");
+    const message = document.getElementById("message");
+    const table = document.getElementById("productTable");
+    const searchInput = document.getElementById("searchInput");
+
+    async function loadProducts(keyword = "") {
+      table.innerHTML =
+        '<tr><td colspan="5">Đang tải dữ liệu...</td></tr>';
+
+      try {
+        const response = await fetch(
+          "/api/products?search=" + encodeURIComponent(keyword)
+        );
+        const products = await response.json();
+
+        if (!response.ok) {
+          throw new Error(products.message || "Không tải được dữ liệu.");
+        }
+
+        table.replaceChildren();
+
+        if (products.length === 0) {
+          const row = document.createElement("tr");
+          const cell = document.createElement("td");
+          cell.colSpan = 5;
+          cell.textContent = "Không có sản phẩm phù hợp.";
+          row.appendChild(cell);
+          table.appendChild(row);
+          return;
+        }
+
+        for (const product of products) {
+          const row = document.createElement("tr");
+
+          const values = [
+            product.id,
+            product.product_code,
+            product.name,
+            Number(product.price).toLocaleString("vi-VN"),
+            product.quantity
+          ];
+
+          for (const value of values) {
+            const cell = document.createElement("td");
+            cell.textContent = String(value);
+            row.appendChild(cell);
+          }
+
+          table.appendChild(row);
+        }
+      } catch (error) {
+        table.innerHTML =
+          '<tr><td colspan="5">Không thể tải dữ liệu. Kiểm tra kết nối.</td></tr>';
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      message.textContent = "Đang xử lý...";
+
+      const data = Object.fromEntries(new FormData(form).entries());
+      data.price = Number(data.price);
+      data.quantity = Number(data.quantity);
+
+      try {
+        const response = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        message.textContent = result.message || "Có lỗi xảy ra.";
+
+        if (response.ok) {
+          form.reset();
+          await loadProducts(searchInput.value.trim());
+        }
+      } catch (error) {
+        message.textContent = "Không thể kết nối đến máy chủ.";
+      }
+    });
+
+    document.getElementById("searchButton").addEventListener("click", () => {
+      loadProducts(searchInput.value.trim());
+    });
+
+    document.getElementById("resetButton").addEventListener("click", () => {
+      searchInput.value = "";
+      loadProducts();
+    });
+
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        loadProducts(searchInput.value.trim());
+      }
+    });
+
+    loadProducts();
+  </script>
 </body>
 </html>
