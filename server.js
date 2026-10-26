@@ -2,7 +2,7 @@
 require("dotenv").config();
 
 const express = require("express");
-const mysql = require("mysql2/promise");
+const { MongoClient } = require("mongodb");
 const path = require("path");
 
 const app = express();
@@ -12,49 +12,29 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-const pool = mysql.createPool({
-  host: process.env.MYSQLHOST,
-  port: Number(process.env.MYSQLPORT),
-  user: process.env.MYSQLUSER,
-  password: process.env.MYSQLPASSWORD,
-  database: process.env.MYSQLDATABASE,
+const uri = process.env.MONGODB_URI;
+const databaseName = process.env.MONGODB_DATABASE || "product_app";
 
-  ssl: {
-    minVersion: "TLSv1.2",
-    rejectUnauthorized: true,
-    ca: process.env.MYSQL_SSL_CA
-      ? require("fs").readFileSync(process.env.MYSQL_SSL_CA, "utf8")
-      : undefined
-  },
-
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
-
-// Tạo bảng nếu chưa tồn tại
-async function initializeDatabase() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS products (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      product_code VARCHAR(50) NOT NULL UNIQUE,
-      name VARCHAR(255) NOT NULL,
-      price DECIMAL(15, 2) NOT NULL,
-      quantity INT NOT NULL DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  console.log("MySQL connected; products table is ready.");
+if (!uri) {
+  throw new Error("Thiếu biến môi trường MONGODB_URI");
 }
 
-// Kiểm tra trạng thái máy chủ
+const client = new MongoClient(uri);
+let db;
+let products;
+
+// Chuyển chuỗi thành regex an toàn để tìm kiếm
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Kiểm tra kết nối
 app.get("/api/health", async (req, res) => {
   try {
-    await pool.query("SELECT 1");
+    await db.command({ ping: 1 });
     res.json({ status: "ok", database: "connected" });
   } catch (error) {
-    console.error("Health check failed:", error.code || "DB_ERROR");
+    console.error("Health check failed:", error.name);
     res.status(503).json({
       status: "error",
       database: "unavailable"
@@ -66,28 +46,31 @@ app.get("/api/health", async (req, res) => {
 app.get("/api/products", async (req, res) => {
   try {
     const keyword = String(req.query.search || "").trim();
-
-    let sql = `
-      SELECT id, product_code, name, price, quantity, created_at
-      FROM products
-    `;
-    let params = [];
+    const filter = {};
 
     if (keyword) {
-      sql += `
-        WHERE product_code LIKE ? OR name LIKE ?
-      `;
-      const pattern = `%${keyword}%`;
-      params = [pattern, pattern];
+      const pattern = escapeRegex(keyword);
+      filter.$or = [
+        { product_code: { $regex: pattern, $options: "i" } },
+        { name: { $regex: pattern, $options: "i" } }
+      ];
     }
 
-    sql += " ORDER BY id DESC";
+    const rows = await products
+      .find(filter)
+      .sort({ _id: -1 })
+      .toArray();
 
-    const [rows] = await pool.execute(sql, params);
-    res.json(rows);
+    // Giữ trường id để tương thích với frontend cũ
+    res.json(rows.map(({ _id, ...item }) => ({
+      ...item,
+      id: _id.toString()
+    })));
   } catch (error) {
-    console.error("Product search failed:", error.code || "DB_ERROR");
-    res.status(500).json({ message: "Không thể tải sản phẩm." });
+    console.error("Product search failed:", error.name);
+    res.status(500).json({
+      message: "Không thể tải sản phẩm."
+    });
   }
 });
 
@@ -114,33 +97,48 @@ app.post("/api/products", async (req, res) => {
       });
     }
 
-    const [result] = await pool.execute(
-      `INSERT INTO products
-       (product_code, name, price, quantity)
-       VALUES (?, ?, ?, ?)`,
-      [code, productName, productPrice, productQuantity]
-    );
+    const result = await products.insertOne({
+      product_code: code,
+      name: productName,
+      price: productPrice,
+      quantity: productQuantity,
+      created_at: new Date()
+    });
 
     res.status(201).json({
       message: "Thêm sản phẩm thành công.",
-      id: result.insertId
+      id: result.insertedId.toString()
     });
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") {
+    if (error.code === 11000) {
       return res.status(409).json({
         message: "Mã sản phẩm đã tồn tại."
       });
     }
 
-    console.error("Product insert failed:", error.code || "DB_ERROR");
-    res.status(500).json({ message: "Không thể thêm sản phẩm." });
+    console.error("Product insert failed:", error.name);
+    res.status(500).json({
+      message: "Không thể thêm sản phẩm."
+    });
   }
 });
 
-// Khởi động sau khi kết nối và tạo bảng thành công
+// Kết nối trước khi mở server
 async function startServer() {
   try {
-    await initializeDatabase();
+    await client.connect();
+
+    db = client.db(databaseName);
+    products = db.collection("products");
+
+    await products.createIndex(
+      { product_code: 1 },
+      { unique: true }
+    );
+
+    await db.command({ ping: 1 });
+
+    console.log("MongoDB connected; products collection is ready.");
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
@@ -148,8 +146,9 @@ async function startServer() {
   } catch (error) {
     console.error(
       "Application startup failed:",
-      error.code || "STARTUP_ERROR"
+      error.code || error.name || "STARTUP_ERROR"
     );
+    await client.close().catch(() => {});
     process.exit(1);
   }
 }
