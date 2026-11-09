@@ -187,7 +187,7 @@ app.post("/api/products", authMiddleware, requireRoles("admin"), wrap(async (req
     throw error;
   }
 }));
-
+///11111
 app.put("/api/products/:id", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const id = Number(req.params.id);
   const b = req.body;
