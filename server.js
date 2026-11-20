@@ -12,7 +12,7 @@ app.use(express.json({ limit: "12mb" }));
 app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Kết nối Railway MySQL
+// Railway MySQL connection pool
 const pool = mysql.createPool({
   host: process.env.MYSQLHOST,
   port: Number(process.env.MYSQLPORT || 3306),
@@ -28,7 +28,7 @@ const pool = mysql.createPool({
 const ORDER_STATUSES = ["pending", "confirmed", "shipping", "completed", "cancelled"];
 const PHONE_RE = /^[0-9+\s.-]{8,20}$/;
 
-// Xử lý lỗi async
+// Async error handler wrapper
 function wrap(fn) {
   return function (req, res, next) {
     Promise.resolve(fn(req, res, next)).catch((err) => {
@@ -36,7 +36,7 @@ function wrap(fn) {
       if (status >= 500) {
         console.error("API error:", err.code || err.message);
       }
-      res.status(status).json({ message: err.message || "Lỗi server." });
+      res.status(status).json({ message: err.message || "Internal server error." });
     });
   };
 }
@@ -47,14 +47,14 @@ function httpError(status, message) {
   return err;
 }
 
-// Mã hóa mật khẩu bằng PBKDF2
+// PBKDF2 password hashing
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, "sha512").toString("hex");
   return `${salt}:${hash}`;
 }
 
-// Kiểm tra mật khẩu
+// Verify password
 function verifyPassword(password, stored) {
   if (!stored) return false;
   const [salt, originalHash] = stored.split(":");
@@ -65,7 +65,7 @@ function verifyPassword(password, stored) {
   return original.length === current.length && crypto.timingSafeEqual(original, current);
 }
 
-// Token đăng nhập trong bộ nhớ
+// In-memory active tokens
 const activeTokens = new Map();
 
 function generateToken(user) {
@@ -79,7 +79,7 @@ async function authMiddleware(req, res, next) {
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
   if (!token || !activeTokens.has(token)) {
-    return res.status(401).json({ message: "Chưa đăng nhập hoặc token hết hạn." });
+    return res.status(401).json({ message: "Unauthorized: Please sign in or session has expired." });
   }
   try {
     const session = activeTokens.get(token);
@@ -94,7 +94,7 @@ async function authMiddleware(req, res, next) {
     }
     if (!rows[0] || rows[0].is_locked) {
       activeTokens.delete(token);
-      return res.status(401).json({ message: "Tài khoản đã bị khóa." });
+      return res.status(401).json({ message: "Account has been locked." });
     }
     req.user = { ...session, role: rows[0].role };
     next();
@@ -106,20 +106,20 @@ async function authMiddleware(req, res, next) {
 function requireRoles(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Tài khoản không có quyền thực hiện thao tác này." });
+      return res.status(403).json({ message: "Forbidden: You do not have permission to perform this action." });
     }
     next();
   };
 }
 
-// Kiểm tra kết nối database
+// Database health check
 app.get("/api/health", wrap(async (req, res) => {
   await pool.query("SELECT 1");
   res.json({ status: "ok", database: "connected" });
 }));
 
-// Danh sách và tìm kiếm sản phẩm
-// Khách hàng chỉ thấy sản phẩm đang bán và không thấy giá nhập.
+// List and search products
+// Customers only see active products and cannot see cost prices.
 app.get("/api/products", authMiddleware, wrap(async (req, res) => {
   const isAdmin = req.user.role === "admin";
   const keyword = String(req.query.search || "").trim();
@@ -155,7 +155,7 @@ app.get("/api/products", authMiddleware, wrap(async (req, res) => {
   res.json(rows);
 }));
 
-// Thêm sản phẩm
+// Add product
 app.post("/api/products", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const { product_code, sku, name, category_id, brand_id, image, status,
     cost_price, price, quantity, low_stock_threshold, import_date } = req.body;
@@ -169,7 +169,7 @@ app.post("/api/products", authMiddleware, requireRoles("admin"), wrap(async (req
     !Number.isFinite(productPrice) || productPrice <= 0 ||
     !Number.isInteger(productQuantity) || productQuantity < 0
   ) {
-    throw httpError(400, "Vui lòng nhập mã SKU, tên, giá bán và số lượng hợp lệ.");
+    throw httpError(400, "Please provide a valid SKU, product name, price, and quantity.");
   }
   try {
     const [result] = await pool.execute(
@@ -181,9 +181,9 @@ app.post("/api/products", authMiddleware, requireRoles("admin"), wrap(async (req
         productCost, productPrice, productQuantity, status === "inactive" ? "inactive" : "active",
         Number(low_stock_threshold || 5), import_date || null]
     );
-    res.status(201).json({ message: "Thêm sản phẩm thành công.", id: result.insertId });
+    res.status(201).json({ message: "Product added successfully.", id: result.insertId });
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") throw httpError(409, "Mã sản phẩm đã tồn tại.");
+    if (error.code === "ER_DUP_ENTRY") throw httpError(409, "Product code/SKU already exists.");
     throw error;
   }
 }));
@@ -195,7 +195,7 @@ app.put("/api/products/:id", authMiddleware, requireRoles("admin"), wrap(async (
   const price = Number(b.price);
   const cost = Number(b.cost_price || 0);
   if (!Number.isInteger(quantity) || quantity < 0 || !Number.isFinite(price) || price <= 0) {
-    throw httpError(400, "Giá bán và số lượng không hợp lệ.");
+    throw httpError(400, "Invalid selling price or quantity.");
   }
   await pool.execute(`
     UPDATE products SET product_code=?, sku=?, name=?, category_id=?, brand_id=?, image=?,
@@ -205,12 +205,12 @@ app.put("/api/products/:id", authMiddleware, requireRoles("admin"), wrap(async (
       b.status === "inactive" ? "inactive" : "active", Number(b.low_stock_threshold || 5),
       b.import_date || null, id]
   );
-  res.json({ message: "Cập nhật sản phẩm thành công." });
+  res.json({ message: "Product updated successfully." });
 }));
 
 app.delete("/api/products/:id", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   await pool.execute("DELETE FROM products WHERE id=?", [Number(req.params.id)]);
-  res.json({ message: "Đã xóa sản phẩm." });
+  res.json({ message: "Product deleted successfully." });
 }));
 
 app.get("/api/categories", wrap(async (req, res) => {
@@ -225,13 +225,13 @@ app.get("/api/categories", wrap(async (req, res) => {
 }));
 app.post("/api/categories", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const name = String(req.body.name || "").trim();
-  if (!name) throw httpError(400, "Tên danh mục không được để trống.");
+  if (!name) throw httpError(400, "Category name cannot be empty.");
   await pool.execute("INSERT INTO categories (name) VALUES (?)", [name]);
-  res.status(201).json({ message: "Đã tạo danh mục." });
+  res.status(201).json({ message: "Category created successfully." });
 }));
 app.delete("/api/categories/:id", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   await pool.execute("DELETE FROM categories WHERE id=?", [Number(req.params.id)]);
-  res.json({ message: "Đã xóa danh mục." });
+  res.json({ message: "Category deleted successfully." });
 }));
 
 app.get("/api/brands", wrap(async (req, res) => {
@@ -246,37 +246,37 @@ app.get("/api/brands", wrap(async (req, res) => {
 }));
 app.post("/api/brands", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const name = String(req.body.name || "").trim();
-  if (!name) throw httpError(400, "Tên thương hiệu không được để trống.");
+  if (!name) throw httpError(400, "Brand name cannot be empty.");
   await pool.execute("INSERT INTO brands (name) VALUES (?)", [name]);
-  res.status(201).json({ message: "Đã tạo thương hiệu." });
+  res.status(201).json({ message: "Brand created successfully." });
 }));
 app.delete("/api/brands/:id", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   await pool.execute("DELETE FROM brands WHERE id=?", [Number(req.params.id)]);
-  res.json({ message: "Đã xóa thương hiệu." });
+  res.json({ message: "Brand deleted successfully." });
 }));
 
-// Nhập/xuất kho thủ công
+// Manual inventory movement (Stock In / Stock Out)
 app.post("/api/inventory/movement", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const productId = Number(req.body.product_id);
   const type = req.body.type === "out" ? "out" : "in";
   const quantity = Number(req.body.quantity);
   if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0) {
-    throw httpError(400, "Thông tin nhập/xuất kho không hợp lệ.");
+    throw httpError(400, "Invalid inventory movement information.");
   }
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute("SELECT quantity FROM products WHERE id=? FOR UPDATE", [productId]);
-    if (!rows[0]) throw httpError(404, "Không tìm thấy sản phẩm.");
+    if (!rows[0]) throw httpError(404, "Product not found.");
     const nextQuantity = type === "in" ? rows[0].quantity + quantity : rows[0].quantity - quantity;
-    if (nextQuantity < 0) throw httpError(400, "Số lượng xuất vượt quá tồn kho.");
+    if (nextQuantity < 0) throw httpError(400, "Export quantity exceeds available stock.");
     await connection.execute("UPDATE products SET quantity=? WHERE id=?", [nextQuantity, productId]);
     await connection.execute(
       "INSERT INTO inventory_movements (product_id,type,quantity,note,user_id,actor_name) VALUES (?,?,?,?,?,?)",
       [productId, type, quantity, String(req.body.note || "").trim(), req.user.id, req.user.username]
     );
     await connection.commit();
-    res.json({ message: type === "in" ? "Đã nhập kho." : "Đã xuất kho.", quantity: nextQuantity });
+    res.json({ message: type === "in" ? "Stock imported successfully." : "Stock exported successfully.", quantity: nextQuantity });
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -303,11 +303,11 @@ app.post("/api/products/import", authMiddleware, requireRoles("admin"), wrap(asy
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
   let imported = 0;
   for (const row of rows) {
-    const code = String(row.SKU || row.sku || row["Mã SKU"] || "").trim();
-    const name = String(row["Tên sản phẩm"] || row.name || "").trim();
-    const price = Number(row["Giá bán"] || row.price || 0);
-    const cost = Number(row["Giá nhập"] || row.cost_price || 0);
-    const quantity = Number(row["Số lượng"] || row.quantity || 0);
+    const code = String(row.SKU || row.sku || row["Mã SKU"] || row["Product Code"] || "").trim();
+    const name = String(row["Product Name"] || row["Tên sản phẩm"] || row.name || "").trim();
+    const price = Number(row["Selling Price"] || row["Giá bán"] || row.price || 0);
+    const cost = Number(row["Cost Price"] || row["Giá nhập"] || row.cost_price || 0);
+    const quantity = Number(row.Quantity || row["Số lượng"] || row.quantity || 0);
     if (!code || !name || !Number.isFinite(price) || price <= 0 || !Number.isInteger(quantity) || quantity < 0) continue;
     await pool.execute(`
       INSERT INTO products (product_code,sku,name,cost_price,price,quantity,status,low_stock_threshold)
@@ -316,36 +316,36 @@ app.post("/api/products/import", authMiddleware, requireRoles("admin"), wrap(asy
     `, [code, code, name, cost, price, quantity, "active", 5]);
     imported++;
   }
-  res.json({ message: `Đã nhập ${imported} sản phẩm.`, imported });
+  res.json({ message: `Imported ${imported} products successfully.`, imported });
 }));
 
-// Đăng ký tài khoản khách hàng
+// Customer registration
 app.post("/api/register", wrap(async (req, res) => {
   const username = String(req.body.username || "").trim().slice(0, 50);
   const fullName = String(req.body.full_name || "").trim().slice(0, 100);
   const password = String(req.body.password || "");
 
   if (!username || !fullName || password.length < 6) {
-    throw httpError(400, "Nhập đủ họ tên, tên đăng nhập và mật khẩu từ 6 ký tự.");
+    throw httpError(400, "Please provide full name, username, and a password of at least 6 characters.");
   }
 
-  // Tên đăng nhập không được trùng với tài khoản quản lý
+  // Username must not conflict with admins
   const [adminDup] = await pool.execute("SELECT id FROM admins WHERE username=?", [username]);
-  if (adminDup[0]) throw httpError(409, "Tên đăng nhập đã tồn tại.");
+  if (adminDup[0]) throw httpError(409, "Username already exists.");
 
   try {
     await pool.execute(
       "INSERT INTO users (username, full_name, password_hash, role) VALUES (?, ?, ?, ?)",
       [username, fullName, hashPassword(password), "viewer"]
     );
-    res.status(201).json({ message: "Đăng ký thành công." });
+    res.status(201).json({ message: "Registration successful." });
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") throw httpError(409, "Tên đăng nhập đã tồn tại.");
+    if (error.code === "ER_DUP_ENTRY") throw httpError(409, "Username already exists.");
     throw error;
   }
 }));
 
-// Đăng nhập
+// Sign in
 app.post("/api/login", wrap(async (req, res) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "");
@@ -357,9 +357,9 @@ app.post("/api/login", wrap(async (req, res) => {
   if (adminRows[0]) {
     const admin = adminRows[0];
     if (!verifyPassword(password, admin.password_hash)) {
-      throw httpError(401, "Sai tên đăng nhập hoặc mật khẩu.");
+      throw httpError(401, "Invalid username or password.");
     }
-    if (admin.is_locked) throw httpError(403, "Tài khoản đã bị khóa.");
+    if (admin.is_locked) throw httpError(403, "Account has been locked.");
     const token = generateToken(admin);
     return res.json({
       token,
@@ -373,9 +373,9 @@ app.post("/api/login", wrap(async (req, res) => {
   );
   const user = rows[0];
   if (!user || !verifyPassword(password, user.password_hash)) {
-    throw httpError(401, "Sai tên đăng nhập hoặc mật khẩu.");
+    throw httpError(401, "Invalid username or password.");
   }
-  if (user.is_locked) throw httpError(403, "Tài khoản đã bị khóa.");
+  if (user.is_locked) throw httpError(403, "Account has been locked.");
 
   const token = generateToken(user);
   res.json({
@@ -384,7 +384,7 @@ app.post("/api/login", wrap(async (req, res) => {
   });
 }));
 
-// Thông tin người dùng hiện tại
+// Current user profile
 app.get("/api/me", authMiddleware, wrap(async (req, res) => {
   const isAdmin = req.user.role === "admin";
   const [rows] = await pool.execute(
@@ -392,42 +392,42 @@ app.get("/api/me", authMiddleware, wrap(async (req, res) => {
      FROM ${isAdmin ? "admins" : "users"} WHERE id=?`,
     [req.user.id]
   );
-  if (!rows[0]) throw httpError(404, "Không tìm thấy người dùng.");
+  if (!rows[0]) throw httpError(404, "User not found.");
   res.json(rows[0]);
 }));
 
-// Cập nhật thông tin cá nhân
+// Update personal profile
 app.put("/api/profile", authMiddleware, wrap(async (req, res) => {
   const table = req.user.role === "admin" ? "admins" : "users";
   const fullName = String(req.body.full_name || "").trim().slice(0, 100);
   const phone = String(req.body.phone || "").trim().slice(0, 20);
   const address = String(req.body.address || "").trim().slice(0, 255);
-  if (!fullName) throw httpError(400, "Họ tên không được để trống.");
-  if (phone && !PHONE_RE.test(phone)) throw httpError(400, "Số điện thoại không hợp lệ.");
+  if (!fullName) throw httpError(400, "Full name cannot be empty.");
+  if (phone && !PHONE_RE.test(phone)) throw httpError(400, "Invalid phone number format.");
   await pool.execute(
     `UPDATE ${table} SET full_name=?, phone=?, address=? WHERE id=?`,
     [fullName, phone || null, address || null, req.user.id]
   );
-  res.json({ message: "Đã cập nhật thông tin cá nhân." });
+  res.json({ message: "Profile updated successfully." });
 }));
 
-// Đổi mật khẩu của chính mình
+// Change password
 app.post("/api/profile/password", authMiddleware, wrap(async (req, res) => {
   const table = req.user.role === "admin" ? "admins" : "users";
   const current = String(req.body.current_password || "");
   const next = String(req.body.new_password || "");
-  if (next.length < 6) throw httpError(400, "Mật khẩu mới phải có ít nhất 6 ký tự.");
+  if (next.length < 6) throw httpError(400, "New password must be at least 6 characters.");
   const [rows] = await pool.execute(`SELECT password_hash FROM ${table} WHERE id=?`, [req.user.id]);
   if (!rows[0] || !verifyPassword(current, rows[0].password_hash)) {
-    throw httpError(400, "Mật khẩu hiện tại không đúng.");
+    throw httpError(400, "Current password is incorrect.");
   }
   await pool.execute(`UPDATE ${table} SET password_hash=? WHERE id=?`, [hashPassword(next), req.user.id]);
-  res.json({ message: "Đã đổi mật khẩu." });
+  res.json({ message: "Password changed successfully." });
 }));
 
-// ---------- Đơn hàng ----------
+// ---------- Orders ----------
 
-// Hoàn kho và hủy đơn (dùng trong transaction)
+// Cancel order and return items to stock (within transaction)
 async function cancelOrderTx(connection, orderId, actor) {
   const [items] = await connection.execute(
     "SELECT product_id, quantity FROM order_items WHERE order_id=?",
@@ -438,13 +438,13 @@ async function cancelOrderTx(connection, orderId, actor) {
     await connection.execute("UPDATE products SET quantity=quantity+? WHERE id=?", [item.quantity, item.product_id]);
     await connection.execute(
       "INSERT INTO inventory_movements (product_id,type,quantity,note,user_id,actor_name) VALUES (?,?,?,?,?,?)",
-      [item.product_id, "in", item.quantity, `Hoàn kho do hủy đơn #${orderId}`, actor.id, actor.username]
+      [item.product_id, "in", item.quantity, `Restocked due to cancelled order #${orderId}`, actor.id, actor.username]
     );
   }
   await connection.execute("UPDATE orders SET status='cancelled' WHERE id=?", [orderId]);
 }
 
-// Khách hàng đặt hàng. Giá và tồn kho luôn được kiểm tra lại ở server.
+// Customer checkout. Price and stock are verified on the server.
 app.post("/api/orders", authMiddleware, requireRoles("viewer"), wrap(async (req, res) => {
   const b = req.body;
   const receiver = String(b.receiver_name || "").trim().slice(0, 100);
@@ -452,7 +452,7 @@ app.post("/api/orders", authMiddleware, requireRoles("viewer"), wrap(async (req,
   const address = String(b.address || "").trim().slice(0, 255);
   const note = String(b.note || "").trim().slice(0, 255);
   if (!receiver || !PHONE_RE.test(phone) || !address) {
-    throw httpError(400, "Vui lòng nhập tên người nhận, số điện thoại hợp lệ và địa chỉ giao hàng.");
+    throw httpError(400, "Please provide recipient name, valid phone number, and shipping address.");
   }
 
   const wanted = new Map();
@@ -460,18 +460,18 @@ app.post("/api/orders", authMiddleware, requireRoles("viewer"), wrap(async (req,
     const id = Number(item.product_id);
     const qty = Number(item.quantity);
     if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(qty) || qty <= 0) {
-      throw httpError(400, "Giỏ hàng không hợp lệ.");
+      throw httpError(400, "Invalid order cart.");
     }
     wanted.set(id, (wanted.get(id) || 0) + qty);
   }
-  if (!wanted.size || wanted.size > 50) throw httpError(400, "Giỏ hàng trống hoặc quá lớn.");
+  if (!wanted.size || wanted.size > 50) throw httpError(400, "Cart is empty or exceeds maximum limit of 50 items.");
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     let total = 0;
     const lines = [];
-    // Khóa theo thứ tự id tăng dần để tránh deadlock
+    // Lock in ascending ID order to prevent deadlock
     for (const id of [...wanted.keys()].sort((a, c) => a - c)) {
       const qty = wanted.get(id);
       const [rows] = await connection.execute(
@@ -479,8 +479,8 @@ app.post("/api/orders", authMiddleware, requireRoles("viewer"), wrap(async (req,
         [id]
       );
       const p = rows[0];
-      if (!p || p.status !== "active") throw httpError(400, "Có sản phẩm không còn được bán.");
-      if (p.quantity < qty) throw httpError(400, `"${p.name}" chỉ còn ${p.quantity} sản phẩm.`);
+      if (!p || p.status !== "active") throw httpError(400, "One or more products are inactive or no longer available.");
+      if (p.quantity < qty) throw httpError(400, `"${p.name}" only has ${p.quantity} items left in stock.`);
       total += p.price * qty;
       lines.push({ p, qty });
     }
@@ -502,11 +502,11 @@ app.post("/api/orders", authMiddleware, requireRoles("viewer"), wrap(async (req,
       );
       await connection.execute(
         "INSERT INTO inventory_movements (product_id,type,quantity,note,user_id,actor_name) VALUES (?,?,?,?,?,?)",
-        [p.id, "out", qty, `Đơn hàng #${orderId}`, req.user.id, req.user.username]
+        [p.id, "out", qty, `Order #${orderId}`, req.user.id, req.user.username]
       );
     }
     await connection.commit();
-    res.status(201).json({ message: `Đặt hàng thành công. Mã đơn #${orderId}.`, id: orderId });
+    res.status(201).json({ message: `Order placed successfully. Order ID #${orderId}.`, id: orderId });
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -515,7 +515,7 @@ app.post("/api/orders", authMiddleware, requireRoles("viewer"), wrap(async (req,
   }
 }));
 
-// Danh sách đơn: khách hàng xem đơn của mình, quản lý xem tất cả
+// List orders: customers view their own, admins view all
 app.get("/api/orders", authMiddleware, wrap(async (req, res) => {
   const params = [];
   let sql = "SELECT * FROM orders WHERE 1=1";
@@ -538,7 +538,7 @@ app.get("/api/orders", authMiddleware, wrap(async (req, res) => {
   res.json(orders);
 }));
 
-// Khách hàng tự hủy đơn khi còn chờ xác nhận
+// Customer cancels order while pending
 app.post("/api/orders/:id/cancel", authMiddleware, requireRoles("viewer"), wrap(async (req, res) => {
   const orderId = Number(req.params.id);
   const connection = await pool.getConnection();
@@ -548,11 +548,11 @@ app.post("/api/orders/:id/cancel", authMiddleware, requireRoles("viewer"), wrap(
       "SELECT status FROM orders WHERE id=? AND user_id=? FOR UPDATE",
       [orderId, req.user.id]
     );
-    if (!rows[0]) throw httpError(404, "Không tìm thấy đơn hàng.");
-    if (rows[0].status !== "pending") throw httpError(400, "Chỉ hủy được đơn đang chờ xác nhận.");
+    if (!rows[0]) throw httpError(404, "Order not found.");
+    if (rows[0].status !== "pending") throw httpError(400, "Only pending orders can be cancelled.");
     await cancelOrderTx(connection, orderId, req.user);
     await connection.commit();
-    res.json({ message: "Đã hủy đơn hàng." });
+    res.json({ message: "Order cancelled successfully." });
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -561,18 +561,18 @@ app.post("/api/orders/:id/cancel", authMiddleware, requireRoles("viewer"), wrap(
   }
 }));
 
-// Quản lý đổi trạng thái đơn
+// Admin updates order status
 app.put("/api/orders/:id/status", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const orderId = Number(req.params.id);
   const status = String(req.body.status || "");
-  if (!ORDER_STATUSES.includes(status)) throw httpError(400, "Trạng thái không hợp lệ.");
+  if (!ORDER_STATUSES.includes(status)) throw httpError(400, "Invalid order status.");
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute("SELECT status FROM orders WHERE id=? FOR UPDATE", [orderId]);
-    if (!rows[0]) throw httpError(404, "Không tìm thấy đơn hàng.");
+    if (!rows[0]) throw httpError(404, "Order not found.");
     if (["completed", "cancelled"].includes(rows[0].status)) {
-      throw httpError(400, "Đơn đã kết thúc, không thể đổi trạng thái.");
+      throw httpError(400, "Order is finalized and cannot be modified.");
     }
     if (status === "cancelled") {
       await cancelOrderTx(connection, orderId, req.user);
@@ -580,7 +580,7 @@ app.put("/api/orders/:id/status", authMiddleware, requireRoles("admin"), wrap(as
       await connection.execute("UPDATE orders SET status=? WHERE id=?", [status, orderId]);
     }
     await connection.commit();
-    res.json({ message: "Đã cập nhật trạng thái đơn hàng." });
+    res.json({ message: "Order status updated successfully." });
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -589,7 +589,7 @@ app.put("/api/orders/:id/status", authMiddleware, requireRoles("admin"), wrap(as
   }
 }));
 
-// Thống kê dashboard
+// Dashboard analytics
 app.get("/api/stats", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const [rows] = await pool.execute(`
     SELECT COUNT(*) AS total_products,
@@ -624,7 +624,7 @@ app.get("/api/stats", authMiddleware, requireRoles("admin"), wrap(async (req, re
     const key = d.toLocaleDateString("sv-SE");
     const found = movementRows.find((r) => String(r.day).slice(0, 10) === key);
     chart.push({
-      label: d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
+      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       incoming: Number(found?.incoming || 0),
       outgoing: Number(found?.outgoing || 0)
     });
@@ -640,7 +640,7 @@ app.get("/api/stats", authMiddleware, requireRoles("admin"), wrap(async (req, re
   });
 }));
 
-// ---------- Quản lý tài khoản (chỉ quản lý) ----------
+// ---------- User Management (Admin only) ----------
 
 app.get("/api/users", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const [rows] = await pool.execute(`
@@ -661,7 +661,7 @@ app.post("/api/users", authMiddleware, requireRoles("admin"), wrap(async (req, r
   const role = req.body.role === "admin" ? "admin" : "viewer";
 
   if (!username || !fullName || password.length < 6) {
-    throw httpError(400, "Thiếu thông tin hoặc mật khẩu quá ngắn.");
+    throw httpError(400, "Missing required fields or password is too short.");
   }
 
   try {
@@ -679,19 +679,18 @@ app.post("/api/users", authMiddleware, requireRoles("admin"), wrap(async (req, r
         [username, fullName, passwordHash]
       );
     }
-    res.status(201).json({ message: "Tạo tài khoản thành công." });
+    res.status(201).json({ message: "Account created successfully." });
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") throw httpError(409, "Tên đăng nhập đã tồn tại.");
+    if (error.code === "ER_DUP_ENTRY") throw httpError(409, "Username already exists.");
     throw error;
   }
 }));
 
-// Cập nhật tài khoản (đổi quyền, khóa/mở khóa). Người dùng tự đổi thông tin
-// và mật khẩu ở /api/profile nên route này chỉ dành cho quản lý.
+// Update user account (change role, lock/unlock)
 app.put("/api/users/:id", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId) || targetId <= 0) {
-    throw httpError(400, "ID không hợp lệ.");
+    throw httpError(400, "Invalid account ID.");
   }
 
   let source = null;
@@ -710,11 +709,11 @@ app.put("/api/users/:id", authMiddleware, requireRoles("admin"), wrap(async (req
     );
     if (userRows[0]) source = { type: "user", ...userRows[0] };
   }
-  if (!source) throw httpError(404, "Không tìm thấy tài khoản.");
+  if (!source) throw httpError(404, "Account not found.");
 
   const password = req.body.password ? String(req.body.password) : "";
   if (password && password.length < 6) {
-    throw httpError(400, "Mật khẩu phải có ít nhất 6 ký tự.");
+    throw httpError(400, "Password must be at least 6 characters.");
   }
   const passwordHash = password ? hashPassword(password) : source.password_hash;
 
@@ -736,7 +735,7 @@ app.put("/api/users/:id", authMiddleware, requireRoles("admin"), wrap(async (req
         );
         await pool.execute("DELETE FROM admins WHERE id=?", [targetId]);
       }
-      return res.json({ message: "Cập nhật vai trò thành công." });
+      return res.json({ message: "Role updated successfully." });
     }
   }
 
@@ -750,29 +749,29 @@ app.put("/api/users/:id", authMiddleware, requireRoles("admin"), wrap(async (req
     `UPDATE ${source.type === "admin" ? "admins" : "users"} SET ${fields.join(",")} WHERE id=?`,
     values
   );
-  res.json({ message: "Cập nhật thành công." });
+  res.json({ message: "Account updated successfully." });
 }));
 
-// Xóa tài khoản
+// Delete account
 app.delete("/api/users/:id", authMiddleware, requireRoles("admin"), wrap(async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId) || targetId <= 0) {
-    throw httpError(400, "ID không hợp lệ.");
+    throw httpError(400, "Invalid account ID.");
   }
   if (req.user.id === targetId) {
-    throw httpError(400, "Không thể tự xóa tài khoản của chính mình.");
+    throw httpError(400, "Cannot delete your own account.");
   }
 
   const [adminResult] = await pool.execute("DELETE FROM admins WHERE id=?", [targetId]);
   const [userResult] = await pool.execute("DELETE FROM users WHERE id=?", [targetId]);
 
   if (adminResult.affectedRows === 0 && userResult.affectedRows === 0) {
-    throw httpError(404, "Không tìm thấy tài khoản.");
+    throw httpError(404, "Account not found.");
   }
-  res.json({ message: "Đã xóa tài khoản." });
+  res.json({ message: "Account deleted successfully." });
 }));
 
-// ---------- Khởi tạo database và chạy server ----------
+// ---------- Database Initialization & Server Startup ----------
 
 async function ensureColumn(connection, table, column, definition) {
   const [rows] = await connection.execute(
@@ -785,8 +784,7 @@ async function ensureColumn(connection, table, column, definition) {
   }
 }
 
-// Cột lạ còn sót từ phiên bản cũ mà bắt buộc nhập (NOT NULL, không có giá trị mặc định)
-// sẽ làm lệnh INSERT mới bị lỗi, nên đổi chúng thành cho phép NULL.
+// Relax legacy non-null columns without defaults
 async function relaxLegacyColumns(connection, table, knownColumns) {
   const [cols] = await connection.execute(
     `SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS
@@ -798,13 +796,13 @@ async function relaxLegacyColumns(connection, table, knownColumns) {
   for (const c of cols) {
     if (knownColumns.includes(c.COLUMN_NAME)) continue;
     await connection.execute(`ALTER TABLE ${table} MODIFY \`${c.COLUMN_NAME}\` ${c.COLUMN_TYPE} NULL`);
-    console.log(`Đã cho phép NULL: ${table}.${c.COLUMN_NAME}`);
+    console.log(`Updated column to allow NULL: ${table}.${c.COLUMN_NAME}`);
   }
 }
 
 async function startServer() {
   try {
-    console.log("Đang kết nối Railway MySQL...");
+    console.log("Connecting to Railway MySQL...");
     const connection = await pool.getConnection();
 
     await connection.execute(`
@@ -860,7 +858,7 @@ async function startServer() {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       ) ENGINE=InnoDB
     `);
-    // Tên người thực hiện (admin và khách hàng nằm ở 2 bảng khác nhau nên lưu thẳng tên)
+    // Actor name for movements
     await ensureColumn(connection, "inventory_movements", "actor_name", "VARCHAR(100) NULL");
 
     await connection.execute(`
@@ -888,7 +886,7 @@ async function startServer() {
 
     await ensureColumn(connection, "admins", "is_locked", "BOOLEAN NOT NULL DEFAULT FALSE");
     await ensureColumn(connection, "users", "is_locked", "BOOLEAN NOT NULL DEFAULT FALSE");
-    // Thông tin cá nhân
+    // Personal contact columns
     for (const table of ["users", "admins"]) {
       await ensureColumn(connection, table, "phone", "VARCHAR(20) NULL");
       await ensureColumn(connection, table, "address", "VARCHAR(255) NULL");
@@ -897,7 +895,7 @@ async function startServer() {
     await connection.execute("UPDATE users SET role='viewer' WHERE role IN ('staff','warehouse')");
     await connection.execute("UPDATE users SET is_locked=FALSE WHERE role='admin'");
 
-    // Chuyển các tài khoản admin cũ (nếu còn nằm trong bảng users) sang bảng admins
+    // Migrate legacy admin accounts if needed
     const [legacyAdmins] = await connection.execute(
       "SELECT username, full_name, password_hash, is_locked FROM users WHERE role='admin'"
     );
@@ -911,7 +909,7 @@ async function startServer() {
       await connection.execute("DELETE FROM users WHERE username=?", [legacyAdmin.username]);
     }
 
-    // Đơn hàng
+    // Orders schema
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS orders (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -942,7 +940,7 @@ async function startServer() {
       ) ENGINE=InnoDB
     `);
 
-    // Bổ sung cột còn thiếu nếu bảng orders/order_items đã có từ phiên bản cũ
+    // Ensure missing columns for orders/order_items
     const orderColumns = [
       ["user_id", "INT NOT NULL DEFAULT 0"],
       ["customer_username", "VARCHAR(50) NOT NULL DEFAULT ''"],
@@ -977,7 +975,7 @@ async function startServer() {
         await connection.execute(
           `INSERT INTO admins (username, full_name, password_hash, role, is_locked)
            VALUES (?, ?, ?, 'admin', FALSE)`,
-          [adminUsername, "Quản lý hệ thống", hashPassword(adminPassword)]
+          [adminUsername, "System Administrator", hashPassword(adminPassword)]
         );
         console.log(`Default admin account created: ${adminUsername}`);
       } else {

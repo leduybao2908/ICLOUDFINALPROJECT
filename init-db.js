@@ -2,7 +2,7 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function init() {
-  // Kết nối không chọn database để tạo database trước
+  // Connect without database to create it first
   const conn = await mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -29,17 +29,17 @@ async function init() {
   if (rows[0].total === 0) {
     await conn.query(`
       INSERT INTO products (name, price, description) VALUES
-      ('Áo thun', 150000, 'Áo thun cotton'),
-      ('Quần jean', 350000, 'Quần jean nam'),
-      ('Giày thể thao', 800000, 'Giày chạy bộ')
+      ('T-shirt', 150000, 'Cotton T-shirt'),
+      ('Jeans', 350000, 'Men\\'s denim jeans'),
+      ('Running Shoes', 800000, 'Athletic running shoes')
     `);
   }
 
-  console.log('Tạo database và bảng thành công!');
+  console.log('Database and tables initialized successfully!');
   await conn.end();
 }
 
 init().catch(err => {
-  console.error('Lỗi:', err.message);
+  console.error('Error:', err.message);
   process.exit(1);
 });

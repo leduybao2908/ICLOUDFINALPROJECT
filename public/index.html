@@ -1,76 +1,76 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quản lý kho</title>
+  <title>Warehouse Inventory Management</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- Đăng nhập / Đăng ký -->
+<!-- Sign In / Sign Up -->
 <section id="login" class="login">
   <form id="loginForm" class="login-box">
-    <h1>Quản lý kho</h1><p class="muted">Đăng nhập hệ thống</p>
-    <label>Tên đăng nhập<input id="username" required autocomplete="username"></label>
-    <label>Mật khẩu<input id="password" type="password" required autocomplete="current-password"></label>
-    <button class="btn">Đăng nhập</button>
-    <p class="switch">Chưa có tài khoản? <a href="#" id="showRegister">Đăng ký</a></p>
+    <h1>Warehouse Management</h1><p class="muted">System Sign In</p>
+    <label>Username<input id="username" required autocomplete="username"></label>
+    <label>Password<input id="password" type="password" required autocomplete="current-password"></label>
+    <button class="btn">Sign In</button>
+    <p class="switch">Don't have an account? <a href="#" id="showRegister">Sign Up</a></p>
   </form>
   <form id="registerForm" class="login-box" hidden>
-    <h1>Đăng ký</h1><p class="muted">Tạo tài khoản khách hàng</p>
-    <label>Họ tên<input id="regFullName" required maxlength="100" autocomplete="name"></label>
-    <label>Tên đăng nhập<input id="regUsername" required maxlength="50" autocomplete="username"></label>
-    <label>Mật khẩu (từ 6 ký tự)<input id="regPassword" type="password" minlength="6" required autocomplete="new-password"></label>
-    <label>Nhập lại mật khẩu<input id="regConfirm" type="password" minlength="6" required autocomplete="new-password"></label>
-    <button class="btn">Tạo tài khoản</button>
-    <p class="switch">Đã có tài khoản? <a href="#" id="showLogin">Đăng nhập</a></p>
+    <h1>Sign Up</h1><p class="muted">Create Customer Account</p>
+    <label>Full Name<input id="regFullName" required maxlength="100" autocomplete="name"></label>
+    <label>Username<input id="regUsername" required maxlength="50" autocomplete="username"></label>
+    <label>Password (min 6 characters)<input id="regPassword" type="password" minlength="6" required autocomplete="new-password"></label>
+    <label>Confirm Password<input id="regConfirm" type="password" minlength="6" required autocomplete="new-password"></label>
+    <button class="btn">Create Account</button>
+    <p class="switch">Already have an account? <a href="#" id="showLogin">Sign In</a></p>
   </form>
 </section>
 
 <div id="app" hidden>
   <header class="top">
-    <strong class="brand">Kho hàng</strong>
+    <strong class="brand">Warehouse</strong>
     <nav class="tabs">
-      <!-- Quản lý -->
-      <button data-tab="dashboard" class="adminOnly">Tổng quan</button>
-      <button data-tab="products" class="adminOnly">Sản phẩm</button>
-      <button data-tab="catalog" class="adminOnly">Danh mục &amp; thương hiệu</button>
-      <button data-tab="inventory" class="adminOnly">Tồn kho</button>
-      <button data-tab="orders" class="adminOnly">Đơn hàng</button>
-      <button data-tab="users" class="adminOnly">Tài khoản</button>
-      <!-- Khách hàng -->
-      <button data-tab="shop" class="customerOnly">Mua sắm</button>
-      <button data-tab="cart" class="customerOnly">Giỏ hàng <span id="cartBadge" class="badge" hidden>0</span></button>
-      <button data-tab="myorders" class="customerOnly">Đơn hàng của tôi</button>
-      <!-- Chung -->
-      <button data-tab="profile">Cá nhân</button>
+      <!-- Admin -->
+      <button data-tab="dashboard" class="adminOnly">Dashboard</button>
+      <button data-tab="products" class="adminOnly">Products</button>
+      <button data-tab="catalog" class="adminOnly">Categories &amp; Brands</button>
+      <button data-tab="inventory" class="adminOnly">Inventory</button>
+      <button data-tab="orders" class="adminOnly">Orders</button>
+      <button data-tab="users" class="adminOnly">Accounts</button>
+      <!-- Customer -->
+      <button data-tab="shop" class="customerOnly">Shop</button>
+      <button data-tab="cart" class="customerOnly">Cart <span id="cartBadge" class="badge" hidden>0</span></button>
+      <button data-tab="myorders" class="customerOnly">My Orders</button>
+      <!-- General -->
+      <button data-tab="profile">Profile</button>
     </nav>
-    <div class="who"><span id="whoami"></span><button id="logout" class="btn ghost">Thoát</button></div>
+    <div class="who"><span id="whoami"></span><button id="logout" class="btn ghost">Log Out</button></div>
   </header>
 
   <main>
-    <!-- ===== QUẢN LÝ ===== -->
+    <!-- ===== ADMIN ===== -->
     <section id="dashboard" class="view" hidden>
       <div id="stats" class="stats"></div>
       <div class="split">
-        <div class="panel"><h2>Nhập/xuất kho 14 ngày</h2><div id="chart" class="bars"></div></div>
-        <div class="panel"><h2>Sản phẩm sắp hết hàng</h2><div id="lowStock"></div></div>
+        <div class="panel"><h2>14-Day Stock Movement</h2><div id="chart" class="bars"></div></div>
+        <div class="panel"><h2>Low Stock Alert</h2><div id="lowStock"></div></div>
       </div>
     </section>
 
     <section id="products" class="view" hidden>
       <div class="panel">
         <div class="toolbar">
-          <input id="productSearch" type="search" placeholder="Tìm tên hoặc SKU">
-          <select id="categoryFilter"><option value="">Tất cả danh mục</option></select>
-          <select id="brandFilter"><option value="">Tất cả thương hiệu</option></select>
-          <select id="statusFilter"><option value="">Tất cả trạng thái</option><option value="active">Đang bán</option><option value="inactive">Ngừng bán</option></select>
-          <select id="sortFilter"><option value="newest">Mới nhất</option><option value="name_asc">Tên A-Z</option><option value="name_desc">Tên Z-A</option><option value="price_asc">Giá bán tăng</option><option value="price_desc">Giá bán giảm</option><option value="quantity_asc">Tồn tăng</option><option value="quantity_desc">Tồn giảm</option></select>
-          <button id="importBtn" class="btn ghost">Nhập Excel/CSV</button>
-          <button id="addProduct" class="btn">Add product</button>
+          <input id="productSearch" type="search" placeholder="Search name or SKU">
+          <select id="categoryFilter"><option value="">All Categories</option></select>
+          <select id="brandFilter"><option value="">All Brands</option></select>
+          <select id="statusFilter"><option value="">All Statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+          <select id="sortFilter"><option value="newest">Newest</option><option value="name_asc">Name A-Z</option><option value="name_desc">Name Z-A</option><option value="price_asc">Price: Low to High</option><option value="price_desc">Price: High to Low</option><option value="quantity_asc">Stock: Low to High</option><option value="quantity_desc">Stock: High to Low</option></select>
+          <button id="importBtn" class="btn ghost">Import Excel/CSV</button>
+          <button id="addProduct" class="btn">Add Product</button>
         </div>
         <input id="importFile" type="file" accept=".xlsx,.xls,.csv" hidden>
         <div id="productGrid" class="grid"></div>
@@ -80,13 +80,13 @@
     <section id="catalog" class="view" hidden>
       <div class="grid2">
         <div class="panel">
-          <div class="row between"><h2>Danh mục</h2><button id="addCategory" class="btn">Thêm</button></div>
-          <p class="muted small" style="margin-top: -6px; margin-bottom: 12px">Nhấp vào danh mục để xem danh sách sản phẩm liên quan</p>
+          <div class="row between"><h2>Categories</h2><button id="addCategory" class="btn">Add</button></div>
+          <p class="muted small" style="margin-top: -6px; margin-bottom: 12px">Click a category to view related products</p>
           <div id="categories"></div>
         </div>
         <div class="panel">
-          <div class="row between"><h2>Thương hiệu</h2><button id="addBrand" class="btn">Thêm</button></div>
-          <p class="muted small" style="margin-top: -6px; margin-bottom: 12px">Nhấp vào thương hiệu để xem danh sách sản phẩm liên quan</p>
+          <div class="row between"><h2>Brands</h2><button id="addBrand" class="btn">Add</button></div>
+          <p class="muted small" style="margin-top: -6px; margin-bottom: 12px">Click a brand to view related products</p>
           <div id="brands"></div>
         </div>
       </div>
@@ -94,12 +94,12 @@
       <div class="panel" id="catalogProductsPanel" hidden>
         <div class="row between" style="margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px">
           <div>
-            <h2 id="catalogProductsTitle" style="margin: 0">Sản phẩm liên quan</h2>
+            <h2 id="catalogProductsTitle" style="margin: 0">Related Products</h2>
             <small id="catalogProductsSubtitle" class="sub" style="margin-top: 4px"></small>
           </div>
           <div class="row">
-            <button id="catalogViewInProductsTab" class="btn ghost sm">Xem trong tab Sản phẩm</button>
-            <button id="catalogCloseProducts" class="btn ghost sm" title="Đóng danh sách">✕ Đóng</button>
+            <button id="catalogViewInProductsTab" class="btn ghost sm">View in Products Tab</button>
+            <button id="catalogCloseProducts" class="btn ghost sm" title="Close list">✕ Close</button>
           </div>
         </div>
         <div id="catalogProductsGrid" class="grid"></div>
@@ -107,22 +107,22 @@
     </section>
 
     <section id="inventory" class="view" hidden>
-      <div class="panel"><h2>Nhập/xuất kho</h2>
-        <div class="toolbar"><select id="movementProduct"></select><select id="movementType"><option value="in">Nhập kho</option><option value="out">Xuất kho</option></select><input id="movementQty" type="number" min="1" value="1"><input id="movementNote" placeholder="Ghi chú"><button id="movementSubmit" class="btn">Lưu giao dịch</button></div>
+      <div class="panel"><h2>Stock In / Out</h2>
+        <div class="toolbar"><select id="movementProduct"></select><select id="movementType"><option value="in">Stock In</option><option value="out">Stock Out</option></select><input id="movementQty" type="number" min="1" value="1"><input id="movementNote" placeholder="Note"><button id="movementSubmit" class="btn">Save Transaction</button></div>
       </div>
-      <div class="panel"><h2>Lịch sử nhập/xuất</h2><div class="scroll"><table><thead><tr><th>Thời gian</th><th>Sản phẩm</th><th>Loại</th><th class="r">SL</th><th>Người thực hiện</th><th>Ghi chú</th></tr></thead><tbody id="movementRows"></tbody></table></div></div>
+      <div class="panel"><h2>Stock Movement History</h2><div class="scroll"><table><thead><tr><th>Timestamp</th><th>Product</th><th>Type</th><th class="r">Qty</th><th>Performed By</th><th>Note</th></tr></thead><tbody id="movementRows"></tbody></table></div></div>
     </section>
 
     <section id="orders" class="view" hidden>
       <div class="panel">
         <div class="toolbar" style="margin:0">
           <select id="orderStatusFilter">
-            <option value="">Tất cả đơn hàng</option>
-            <option value="pending">Chờ xác nhận</option>
-            <option value="confirmed">Đã xác nhận</option>
-            <option value="shipping">Đang giao</option>
-            <option value="completed">Hoàn thành</option>
-            <option value="cancelled">Đã hủy</option>
+            <option value="">All Orders</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="shipping">Shipping</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </div>
       </div>
@@ -130,17 +130,17 @@
     </section>
 
     <section id="users" class="view" hidden>
-      <div class="panel"><div class="row between"><h2>Tài khoản &amp; phân quyền</h2><button id="addUser" class="btn">Tạo tài khoản</button></div><div class="scroll"><table><thead><tr><th>ID</th><th>Tài khoản</th><th>Họ tên</th><th>Quyền</th><th>Trạng thái</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></div>
+      <div class="panel"><div class="row between"><h2>Accounts &amp; Permissions</h2><button id="addUser" class="btn">Create Account</button></div><div class="scroll"><table><thead><tr><th>ID</th><th>Username</th><th>Full Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div></div>
     </section>
 
-    <!-- ===== KHÁCH HÀNG ===== -->
+    <!-- ===== CUSTOMER ===== -->
     <section id="shop" class="view" hidden>
       <div class="panel">
         <div class="toolbar">
-          <input id="shopSearch" type="search" placeholder="Tìm sản phẩm theo tên hoặc SKU">
-          <select id="shopCategory"><option value="">Tất cả danh mục</option></select>
-          <select id="shopBrand"><option value="">Tất cả thương hiệu</option></select>
-          <select id="shopSort"><option value="newest">Mới nhất</option><option value="price_asc">Giá thấp đến cao</option><option value="price_desc">Giá cao đến thấp</option><option value="name_asc">Tên A-Z</option></select>
+          <input id="shopSearch" type="search" placeholder="Search products by name or SKU">
+          <select id="shopCategory"><option value="">All Categories</option></select>
+          <select id="shopBrand"><option value="">All Brands</option></select>
+          <select id="shopSort"><option value="newest">Newest</option><option value="price_asc">Price: Low to High</option><option value="price_desc">Price: High to Low</option><option value="name_asc">Name A-Z</option></select>
         </div>
         <div id="shopGrid" class="grid"></div>
       </div>
@@ -148,17 +148,17 @@
 
     <section id="cart" class="view" hidden>
       <div class="cartLayout">
-        <div class="panel"><h2>Giỏ hàng của bạn</h2><div id="cartItems"></div></div>
+        <div class="panel"><h2>Your Cart</h2><div id="cartItems"></div></div>
         <div class="panel">
-          <h2>Thanh toán</h2>
-          <div class="total">Tổng cộng: <strong id="cartTotal">0 đ</strong></div>
+          <h2>Checkout</h2>
+          <div class="total">Total: <strong id="cartTotal">0 VND</strong></div>
           <form id="checkoutForm" class="form" hidden>
-            <label>Người nhận<input id="coName" required maxlength="100"></label>
-            <label>Số điện thoại<input id="coPhone" required maxlength="20" inputmode="tel"></label>
-            <label>Địa chỉ giao hàng<input id="coAddress" required maxlength="255"></label>
-            <label>Ghi chú<input id="coNote" maxlength="255" placeholder="Không bắt buộc"></label>
-            <button class="btn wide">Đặt hàng</button>
-            <p class="muted small">Thanh toán khi nhận hàng.</p>
+            <label>Recipient Name<input id="coName" required maxlength="100"></label>
+            <label>Phone Number<input id="coPhone" required maxlength="20" inputmode="tel"></label>
+            <label>Shipping Address<input id="coAddress" required maxlength="255"></label>
+            <label>Note<input id="coNote" maxlength="255" placeholder="Optional"></label>
+            <button class="btn wide">Place Order</button>
+            <p class="muted small">Payment on delivery (COD).</p>
           </form>
         </div>
       </div>
@@ -168,27 +168,27 @@
       <div id="myOrders"></div>
     </section>
 
-    <!-- ===== CHUNG ===== -->
+    <!-- ===== GENERAL ===== -->
     <section id="profile" class="view" hidden>
       <div id="profileStats" class="stats customerOnly"></div>
       <div class="grid2">
         <div class="panel">
-          <h2>Thông tin cá nhân</h2>
+          <h2>Profile Information</h2>
           <form id="profileForm" class="form">
-            <label>Tên đăng nhập<input id="pfUsername" disabled></label>
-            <label>Họ tên<input id="pfName" required maxlength="100"></label>
-            <label>Số điện thoại<input id="pfPhone" maxlength="20" inputmode="tel"></label>
-            <label>Địa chỉ giao hàng mặc định<input id="pfAddress" maxlength="255"></label>
-            <button class="btn">Lưu thay đổi</button>
+            <label>Username<input id="pfUsername" disabled></label>
+            <label>Full Name<input id="pfName" required maxlength="100"></label>
+            <label>Phone Number<input id="pfPhone" maxlength="20" inputmode="tel"></label>
+            <label>Default Shipping Address<input id="pfAddress" maxlength="255"></label>
+            <button class="btn">Save Changes</button>
           </form>
         </div>
         <div class="panel">
-          <h2>Đổi mật khẩu</h2>
+          <h2>Change Password</h2>
           <form id="passwordForm" class="form">
-            <label>Mật khẩu hiện tại<input id="pwOld" type="password" required autocomplete="current-password"></label>
-            <label>Mật khẩu mới<input id="pwNew" type="password" minlength="6" required autocomplete="new-password"></label>
-            <label>Nhập lại mật khẩu mới<input id="pwConfirm" type="password" minlength="6" required autocomplete="new-password"></label>
-            <button class="btn">Đổi mật khẩu</button>
+            <label>Current Password<input id="pwOld" type="password" required autocomplete="current-password"></label>
+            <label>New Password<input id="pwNew" type="password" minlength="6" required autocomplete="new-password"></label>
+            <label>Confirm New Password<input id="pwConfirm" type="password" minlength="6" required autocomplete="new-password"></label>
+            <button class="btn">Update Password</button>
           </form>
         </div>
       </div>
@@ -196,22 +196,22 @@
   </main>
 </div>
 
-<!-- Hộp thoại -->
+<!-- Dialogs -->
 <dialog id="productDialog"><form id="productForm" class="form">
-  <h2 id="productTitle">Sản phẩm</h2>
-  <div class="imagePick"><img id="imagePreview" alt=""><label class="btn ghost">Tải ảnh<input id="imageInput" type="file" accept="image/*" hidden></label></div>
-  <div class="grid2"><label>Mã SKU<input id="sku" required maxlength="100"></label><label>Tên sản phẩm<input id="productName" required maxlength="255"></label></div>
-  <div class="grid2"><label>Danh mục<select id="productCategory"></select></label><label>Thương hiệu<select id="productBrand"></select></label></div>
-  <div class="grid2"><label>Giá nhập<input id="costPrice" type="number" min="0" step="0.01" value="0"></label><label>Giá bán<input id="sellingPrice" type="number" min="0.01" step="0.01" required></label></div>
-  <div class="grid2"><label>Số lượng tồn<input id="quantity" type="number" min="0" step="1" value="0"></label><label>Ngưỡng cảnh báo<input id="threshold" type="number" min="0" step="1" value="5"></label></div>
-  <label>Trạng thái<select id="productStatus"><option value="active">Đang bán</option><option value="inactive">Ngừng bán</option></select></label>
-  <div class="row end"><button type="button" id="closeProduct" class="btn ghost">Hủy</button><button class="btn">Lưu</button></div>
+  <h2 id="productTitle">Product</h2>
+  <div class="imagePick"><img id="imagePreview" alt=""><label class="btn ghost">Upload Image<input id="imageInput" type="file" accept="image/*" hidden></label></div>
+  <div class="grid2"><label>SKU<input id="sku" required maxlength="100"></label><label>Product Name<input id="productName" required maxlength="255"></label></div>
+  <div class="grid2"><label>Category<select id="productCategory"></select></label><label>Brand<select id="productBrand"></select></label></div>
+  <div class="grid2"><label>Cost Price<input id="costPrice" type="number" min="0" step="0.01" value="0"></label><label>Selling Price<input id="sellingPrice" type="number" min="0.01" step="0.01" required></label></div>
+  <div class="grid2"><label>Stock Quantity<input id="quantity" type="number" min="0" step="1" value="0"></label><label>Low Stock Alert Threshold<input id="threshold" type="number" min="0" step="1" value="5"></label></div>
+  <label>Status<select id="productStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+  <div class="row end"><button type="button" id="closeProduct" class="btn ghost">Cancel</button><button class="btn">Save</button></div>
 </form></dialog>
 
 <dialog id="userDialog"><form id="userForm" class="form">
-  <h2>Tạo tài khoản</h2><label>Tài khoản<input id="newUsername" required></label><label>Họ tên<input id="newFullName" required></label><label>Mật khẩu<input id="newPassword" type="password" minlength="6" required></label>
-  <label>Quyền<select id="newRole"><option value="viewer">Khách hàng</option><option value="admin">Quản lý</option></select></label>
-  <div class="row end"><button type="button" id="closeUser" class="btn ghost">Hủy</button><button class="btn">Tạo</button></div>
+  <h2>Create Account</h2><label>Username<input id="newUsername" required></label><label>Full Name<input id="newFullName" required></label><label>Password<input id="newPassword" type="password" minlength="6" required></label>
+  <label>Role<select id="newRole"><option value="viewer">Customer</option><option value="admin">Admin</option></select></label>
+  <div class="row end"><button type="button" id="closeUser" class="btn ghost">Cancel</button><button class="btn">Create</button></div>
 </form></dialog>
 
 <dialog id="detailDialog" class="wideDialog">
@@ -223,33 +223,33 @@
       <div id="dPrice" class="cardPrice"></div>
       <p id="dStock"></p>
       <div class="row">
-        <input id="dQty" type="number" min="1" value="1" class="qtyInput" aria-label="Số lượng">
-        <button id="dAdd" class="btn ghost">Thêm vào giỏ</button>
-        <button id="dBuy" class="btn">Mua ngay</button>
-        <button id="dClose" class="btn ghost">Đóng</button>
+        <input id="dQty" type="number" min="1" value="1" class="qtyInput" aria-label="Quantity">
+        <button id="dAdd" class="btn ghost">Add to Cart</button>
+        <button id="dBuy" class="btn">Buy Now</button>
+        <button id="dClose" class="btn ghost">Close</button>
       </div>
     </div>
   </div>
 </dialog>
 
-<!-- Mua ngay: đặt hàng trực tiếp, không qua giỏ hàng -->
+<!-- Buy Now: Direct checkout without cart -->
 <dialog id="buyDialog" class="wideDialog"><form id="buyForm" class="form">
-  <h2>Mua ngay</h2>
+  <h2>Buy Now</h2>
   <div class="buyItem">
     <img id="bImg" alt="">
     <div><b id="bName"></b><small id="bPrice" class="sub"></small><small id="bStock" class="sub"></small></div>
-    <label>Số lượng<input id="bQty" type="number" min="1" step="1" value="1" required></label>
+    <label>Quantity<input id="bQty" type="number" min="1" step="1" value="1" required></label>
   </div>
   <div class="grid2">
-    <label>Người nhận<input id="byName" required maxlength="100"></label>
-    <label>Số điện thoại<input id="byPhone" required maxlength="20" inputmode="tel"></label>
+    <label>Recipient Name<input id="byName" required maxlength="100"></label>
+    <label>Phone Number<input id="byPhone" required maxlength="20" inputmode="tel"></label>
   </div>
-  <label>Địa chỉ giao hàng<input id="byAddress" required maxlength="255"></label>
-  <label>Ghi chú<input id="byNote" maxlength="255" placeholder="Không bắt buộc"></label>
-  <p class="total">Tổng cộng: <strong id="bTotal">0 đ</strong></p>
-  <p class="muted small">Thanh toán khi nhận hàng.</p>
+  <label>Shipping Address<input id="byAddress" required maxlength="255"></label>
+  <label>Note<input id="byNote" maxlength="255" placeholder="Optional"></label>
+  <p class="total">Total: <strong id="bTotal">0 VND</strong></p>
+  <p class="muted small">Payment on delivery (COD).</p>
   <p id="buyError" class="formError" role="alert" hidden></p>
-  <div class="row end"><button type="button" id="bClose" class="btn ghost">Hủy</button><button id="buySubmit" class="btn">Xác nhận đặt hàng</button></div>
+  <div class="row end"><button type="button" id="bClose" class="btn ghost">Cancel</button><button id="buySubmit" class="btn">Confirm Order</button></div>
 </form></dialog>
 
 <div id="toast" class="toast" role="status"></div>
